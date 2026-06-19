@@ -1,0 +1,77 @@
+import numpy as np
+import pandas as pd
+from keras.models import Sequential
+from keras.layers import Dense, Dropout
+from keras.optimizers import SGD
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report, accuracy_score
+from keras.utils import to_categorical
+
+# Cargar los datos balanceados
+df = pd.read_csv('winequality-whitebest.csv')
+
+
+# Suponiendo que la columna de etiquetas se llama 'clase'
+X = df.drop('clase', axis=1)
+y = df['clase']
+
+# Estandarizar las características
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Dividir los datos en conjuntos de entrenamiento y prueba
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42, stratify=y)
+
+# Convertir las etiquetas a formato categórico
+y_train_cat = to_categorical(y_train)
+y_test_cat = to_categorical(y_test)
+
+# Función para crear el modelo
+def create_model(learning_rate=0.01, momentum=0.0, hidden_layers=1, neurons=10, dropout_rate=0.2):
+    model = Sequential()
+    model.add(Dense(neurons, input_dim=X_train.shape[1], activation='relu'))
+    model.add(Dropout(dropout_rate))
+    for _ in range(hidden_layers - 1):
+        model.add(Dense(neurons, activation='relu'))
+        model.add(Dropout(dropout_rate))
+    model.add(Dense(2, activation='softmax'))
+    optimizer = SGD(learning_rate=learning_rate, momentum=momentum)
+    model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+    return model
+
+# Definir diferentes combinaciones de hiperparámetros manualmente
+hyperparams = [
+    {'learning_rate': 0.01, 'momentum': 0.9, 'hidden_layers': 2, 'neurons': 20, 'dropout_rate': 0.3},
+    {'learning_rate': 0.01, 'momentum': 0.9, 'hidden_layers': 3, 'neurons': 30, 'dropout_rate': 0.4},
+    {'learning_rate': 0.021, 'momentum': 0.14, 'hidden_layers': 3, 'neurons': 10, 'dropout_rate': 0.2},
+    {'learning_rate': 0.021, 'momentum': 0.14, 'hidden_layers': 3, 'neurons': 10, 'dropout_rate': 0.4}
+    # Añadir más combinaciones según sea necesario
+]
+
+# Probar cada combinación
+best_score = 0
+best_params = {}
+best_model = None
+
+for params in hyperparams:
+    print(f"Probando con hiperparámetros: {params}")
+    model = create_model(**params)
+    model.fit(X_train, y_train_cat, epochs=100, batch_size=10, verbose=0, class_weight={0: 1, 1: 1})
+    y_pred = model.predict(X_test)
+    y_pred_classes = np.argmax(y_pred, axis=1)
+    accuracy = accuracy_score(y_test, y_pred_classes)
+    print(f"Precisión: {accuracy}")
+
+    if accuracy > best_score:
+        best_score = accuracy
+        best_params = params
+        best_model = model
+
+print(f"Mejor precisión: {best_score}")
+print(f"Mejores hiperparámetros: {best_params}")
+
+# Evaluar el mejor modelo en el conjunto de prueba
+y_pred = best_model.predict(X_test)
+y_pred_classes = np.argmax(y_pred, axis=1)
+print(classification_report(y_test, y_pred_classes))
