@@ -1,0 +1,56 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+# Cargar el CSV
+df = pd.read_csv('winequalit-white5.csv')
+
+# Suponiendo que la columna de etiquetas se llama 'label'
+X = df.drop('clase', axis=1)  # Características
+y = df['clase']  # Etiquetas
+
+# Dividir los datos en clases mayoritaria y minoritaria
+majority_class = df[df['clase'] == 1]
+minority_class = df[df['clase'] == 0]
+
+# Definir rangos para cada descriptor clave
+def get_bins(data, num_bins):
+    return np.linspace(data.min(), data.max(), num_bins)
+
+# Ejemplo con 10 bins para cada descriptor
+bins_alcohol = get_bins(majority_class['alcohol'], 10)
+bins_volatile_acidity = get_bins(majority_class['volatile acidity'], 12)
+bins_density = get_bins(majority_class['density'], 18)
+bins_total_sulfur_dioxide = get_bins(majority_class['total sulfur dioxide'], 12)
+
+# Función para realizar submuestreo estratificado
+def stratified_subsample(data, bins, column_name, target_count):
+    subsampled_data = pd.DataFrame()
+    for i in range(len(bins) - 1):
+        bin_data = data[(data[column_name] > bins[i]) & (data[column_name] <= bins[i + 1])]
+        subsample_count = int(len(bin_data) / len(data) * target_count)
+        subsampled_data = pd.concat([subsampled_data, bin_data.sample(n=subsample_count, random_state=42)])
+    return subsampled_data
+
+# Definir el número objetivo de instancias para la clase mayoritaria
+target_majority_count = len(minority_class)
+
+# Realizar submuestreo estratificado para cada descriptor clave
+subsampled_alcohol = stratified_subsample(majority_class, bins_alcohol, 'alcohol', target_majority_count)
+subsampled_volatile_acidity = stratified_subsample(majority_class, bins_volatile_acidity, 'volatile acidity', target_majority_count)
+subsampled_density = stratified_subsample(majority_class, bins_density, 'density', target_majority_count)
+subsampled_total_sulfur_dioxide = stratified_subsample(majority_class, bins_total_sulfur_dioxide, 'total sulfur dioxide', target_majority_count)
+
+# Combinar los datos submuestreados
+combined_subsampled = pd.concat([subsampled_alcohol, subsampled_volatile_acidity, subsampled_density, subsampled_total_sulfur_dioxide, minority_class])
+
+# Eliminar duplicados
+combined_subsampled = combined_subsampled.drop_duplicates()
+
+# Calcular las matrices de correlación
+corr_original = df.corr()
+corr_subsampled = combined_subsampled.corr()
+
+# Imprimir matrices de correlación
+print("Matriz de correlación original:\n", corr_original)
+print("Matriz de correlación después del submuestreo estratificado:\n", corr_subsampled)
